@@ -985,6 +985,55 @@ func TestReadCloserClosed(t *testing.T) {
 	}
 }
 
+func TestStripInlineComment_SpaceBeforeInlineComment(t *testing.T) {
+	ini := `[section]
+key = val#tag # real comment
+`
+	f, err := LoadSources(LoadOptions{SpaceBeforeInlineComment: true}, []byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := f.Section("section").Key("key").String()
+	// "val#tag" has no space before #, so it should be preserved.
+	// " # real comment" has a space before #, so it should be stripped.
+	if got != "val#tag" {
+		t.Errorf("expected 'val#tag', got %q", got)
+	}
+}
+
+func TestDeleteSectionWithIndex_UpdatesSectionsByName(t *testing.T) {
+	ini := `[sec]
+key1 = a
+
+[sec]
+key2 = b
+
+[sec]
+key3 = c
+`
+	f, err := LoadSources(LoadOptions{AllowNonUniqueSections: true}, []byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the first section (index 0)
+	err = f.DeleteSectionWithIndex("sec", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// f.Section("sec") should now return the formerly-second section (key2=b)
+	sec := f.Section("sec")
+	if sec.Key("key2").String() != "b" {
+		t.Errorf("expected key2=b after deleting index 0, got %q", sec.Key("key2").String())
+	}
+
+	// Verify HasSection still works
+	if !f.HasSection("sec") {
+		t.Error("HasSection('sec') should still return true")
+	}
+}
+
 type trackingReadCloser struct {
 	*bytes.Reader
 	closed bool

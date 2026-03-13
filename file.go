@@ -259,6 +259,8 @@ func (f *File) DeleteSectionWithIndex(name string, index int) error {
 	if len(f.sectionList[lookupName]) == 0 {
 		delete(f.sectionsByName, lookupName)
 		delete(f.sectionList, lookupName)
+	} else if index == 0 {
+		f.sectionsByName[lookupName] = f.sectionList[lookupName][0]
 	}
 	for i, sec := range f.sections {
 		if sec == target {

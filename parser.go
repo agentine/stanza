@@ -393,13 +393,17 @@ func (p *parser) stripInlineComment(value string) string {
 					if bestIdx < 0 || idx < bestIdx {
 						bestIdx = idx
 					}
+					break
 				}
+				// No preceding space — keep scanning for a later match.
+				offset = idx + 1
+				continue
 			} else {
 				if bestIdx < 0 || idx < bestIdx {
 					bestIdx = idx
 				}
+				break
 			}
-			break
 		}
 	}
 	if bestIdx >= 0 {
