@@ -86,6 +86,7 @@ type parser struct {
 	unparseable    map[string]bool
 	currentSection *Section
 	autoIncrID     int
+	pendingComment string
 }
 
 func (p *parser) parse(data []byte) error {
@@ -147,20 +148,17 @@ func (p *parser) parse(data []byte) error {
 	return nil
 }
 
-// pendingComment stores a comment to attach to the next section or key.
-var pendingComment string
-
 func (p *parser) handleComment(line string) {
-	if pendingComment != "" {
-		pendingComment += "\n" + line
+	if p.pendingComment != "" {
+		p.pendingComment += "\n" + line
 	} else {
-		pendingComment = line
+		p.pendingComment = line
 	}
 }
 
 func (p *parser) consumeComment() string {
-	c := pendingComment
-	pendingComment = ""
+	c := p.pendingComment
+	p.pendingComment = ""
 	return c
 }
 
