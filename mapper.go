@@ -44,6 +44,22 @@ func StrictMapToWithMapper(v interface{}, mapper NameMapper, source interface{},
 	return cfg.StrictMapTo(v)
 }
 
+// ReflectFrom loads source(s) into an INI File, then populates it
+// from the struct pointed to by v.
+func ReflectFrom(v interface{}, source interface{}, others ...interface{}) error {
+	return ReflectFromWithMapper(v, nil, source, others...)
+}
+
+// ReflectFromWithMapper is like ReflectFrom with a custom NameMapper.
+func ReflectFromWithMapper(v interface{}, mapper NameMapper, source interface{}, others ...interface{}) error {
+	cfg, err := Load(source, others...)
+	if err != nil {
+		return err
+	}
+	cfg.NameMapper = mapper
+	return cfg.ReflectFrom(v)
+}
+
 // ---------------------------------------------------------------------------
 // File methods
 // ---------------------------------------------------------------------------
@@ -87,6 +103,51 @@ func (f *File) ReflectFrom(v interface{}) error {
 func (f *File) ReflectFromWithMapper(v interface{}, mapper NameMapper) error {
 	f.NameMapper = mapper
 	return f.ReflectFrom(v)
+}
+
+// ---------------------------------------------------------------------------
+// Section methods
+// ---------------------------------------------------------------------------
+
+// MapTo maps the section into the struct pointed to by v.
+func (s *Section) MapTo(v interface{}) error {
+	return s.mapTo(v, false)
+}
+
+// StrictMapTo maps the section into v, returning an error if any
+// INI keys are not mapped to struct fields.
+func (s *Section) StrictMapTo(v interface{}) error {
+	return s.mapTo(v, true)
+}
+
+func (s *Section) mapTo(v interface{}, strict bool) error {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return errors.New("MapTo requires a non-nil pointer to a struct")
+	}
+	rv = rv.Elem()
+	if rv.Kind() != reflect.Struct {
+		return errors.New("MapTo requires a pointer to a struct")
+	}
+	if s.f == nil {
+		return errors.New("section is not attached to a file")
+	}
+	return s.f.mapSection(rv, s, strict)
+}
+
+// ReflectFrom populates the section from the struct v.
+func (s *Section) ReflectFrom(v interface{}) error {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return errors.New("ReflectFrom requires a struct or pointer to struct")
+	}
+	if s.f == nil {
+		return errors.New("section is not attached to a file")
+	}
+	return s.f.reflectSection(rv, s)
 }
 
 // ---------------------------------------------------------------------------

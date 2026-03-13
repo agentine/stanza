@@ -814,3 +814,183 @@ func TestRoundtripMultipleSections(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Bug fix tests
+// ---------------------------------------------------------------------------
+
+func TestDeleteSection_AllowNonUniqueSections(t *testing.T) {
+	ini := `[sec]
+key1 = a
+
+[sec]
+key2 = b
+
+[sec]
+key3 = c
+`
+	f, err := LoadSources(LoadOptions{AllowNonUniqueSections: true}, []byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 3 sections with name "sec".
+	secs, err2 := f.SectionsByName("sec")
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if len(secs) != 3 {
+		t.Fatalf("expected 3 sections named 'sec', got %d", len(secs))
+	}
+
+	// Delete the first one.
+	f.DeleteSection("sec")
+
+	// Should have 2 remaining.
+	secs, err2 = f.SectionsByName("sec")
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+	if len(secs) != 2 {
+		t.Fatalf("expected 2 sections named 'sec' after delete, got %d", len(secs))
+	}
+
+	// The section should still be accessible.
+	if !f.HasSection("sec") {
+		t.Error("HasSection('sec') should still return true")
+	}
+
+	// First remaining section should have key2.
+	sec := f.Section("sec")
+	if sec.Key("key2").String() != "b" {
+		t.Errorf("expected key2=b in first remaining section, got %q", sec.Key("key2").String())
+	}
+}
+
+func TestStripInlineComment_EscapedThenUnescaped(t *testing.T) {
+	ini := `[section]
+key = value \# not a comment # real comment
+`
+	f, err := Load([]byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := f.Section("section").Key("key").String()
+	// The escaped \# should be preserved, but text after the unescaped # should be stripped.
+	if !strings.Contains(got, `\#`) {
+		t.Errorf("expected escaped \\# to be preserved, got %q", got)
+	}
+	if strings.Contains(got, "real comment") {
+		t.Errorf("expected unescaped # comment to be stripped, got %q", got)
+	}
+}
+
+func TestSectionMapTo(t *testing.T) {
+	ini := `[app]
+name = TestApp
+port = 8080
+`
+	f, err := Load([]byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type Config struct {
+		Name string `ini:"name"`
+		Port int    `ini:"port"`
+	}
+	var cfg Config
+	err = f.Section("app").MapTo(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Name != "TestApp" {
+		t.Errorf("expected Name=TestApp, got %q", cfg.Name)
+	}
+	if cfg.Port != 8080 {
+		t.Errorf("expected Port=8080, got %d", cfg.Port)
+	}
+}
+
+func TestSectionStrictMapTo(t *testing.T) {
+	ini := `[app]
+name = TestApp
+unknown_key = oops
+`
+	f, err := Load([]byte(ini))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type Config struct {
+		Name string `ini:"name"`
+	}
+	var cfg Config
+	err = f.Section("app").StrictMapTo(&cfg)
+	if err == nil {
+		t.Error("expected error for unmapped key in StrictMapTo")
+	}
+}
+
+func TestSectionReflectFrom(t *testing.T) {
+	f := Empty()
+	sec, err := f.NewSection("app")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type Config struct {
+		Name string `ini:"name"`
+		Port int    `ini:"port"`
+	}
+	cfg := Config{Name: "MyApp", Port: 9090}
+	err = sec.ReflectFrom(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sec.Key("name").String() != "MyApp" {
+		t.Errorf("expected name=MyApp, got %q", sec.Key("name").String())
+	}
+	if sec.Key("port").String() != "9090" {
+		t.Errorf("expected port=9090, got %q", sec.Key("port").String())
+	}
+}
+
+func TestReflectFromPackageLevel(t *testing.T) {
+	type Config struct {
+		Name string `ini:"name"`
+	}
+	cfg := Config{Name: "test"}
+	// ReflectFrom requires a loadable source; use empty bytes.
+	err := ReflectFrom(&cfg, []byte(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReadCloserClosed(t *testing.T) {
+	// Verify that io.ReadCloser sources get closed.
+	data := []byte("[section]\nkey = val\n")
+	rc := &trackingReadCloser{Reader: bytes.NewReader(data)}
+	f, err := Load(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rc.closed {
+		t.Error("ReadCloser should have been closed after Load")
+	}
+	if f.Section("section").Key("key").String() != "val" {
+		t.Error("expected key=val")
+	}
+}
+
+type trackingReadCloser struct {
+	*bytes.Reader
+	closed bool
+}
+
+func (t *trackingReadCloser) Close() error {
+	t.closed = true
+	return nil
+}

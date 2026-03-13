@@ -108,8 +108,7 @@ type LoadOptions struct {
 	AllowDuplicateShadowValues bool
 }
 
-// SnackCase is a NameMapper that converts CamelCase to snake_case,
-// then uppercases the result.
+// SnackCase is a NameMapper that converts CamelCase to snake_case.
 var SnackCase NameMapper
 
 // TitleUnderscore is a NameMapper that inserts underscores before

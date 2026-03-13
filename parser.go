@@ -373,23 +373,40 @@ func (p *parser) stripInlineComment(value string) string {
 		return value
 	}
 
+	bestIdx := -1
 	for _, c := range []byte{'#', ';'} {
-		idx := strings.IndexByte(value, c)
-		if idx < 0 {
-			continue
-		}
-		// Check for escaped comment.
-		if idx > 0 && value[idx-1] == '\\' {
-			continue
-		}
-		if p.opts.SpaceBeforeInlineComment {
-			if idx > 0 && value[idx-1] == ' ' {
-				value = strings.TrimRight(value[:idx-1], " \t")
+		// Scan for the first UNESCAPED occurrence of the comment char.
+		offset := 0
+		for {
+			idx := strings.IndexByte(value[offset:], c)
+			if idx < 0 {
 				break
 			}
-		} else {
-			value = strings.TrimRight(value[:idx], " \t")
+			idx += offset
+			// Check for escaped comment.
+			if idx > 0 && value[idx-1] == '\\' {
+				offset = idx + 1
+				continue
+			}
+			if p.opts.SpaceBeforeInlineComment {
+				if idx > 0 && value[idx-1] == ' ' {
+					if bestIdx < 0 || idx < bestIdx {
+						bestIdx = idx
+					}
+				}
+			} else {
+				if bestIdx < 0 || idx < bestIdx {
+					bestIdx = idx
+				}
+			}
 			break
+		}
+	}
+	if bestIdx >= 0 {
+		if p.opts.SpaceBeforeInlineComment {
+			value = strings.TrimRight(value[:bestIdx-1], " \t")
+		} else {
+			value = strings.TrimRight(value[:bestIdx], " \t")
 		}
 	}
 	return value

@@ -216,14 +216,25 @@ func (f *File) HasSection(name string) bool {
 }
 
 // DeleteSection deletes the first section with the given name.
+// When AllowNonUniqueSections is set, only the first section is
+// removed and remaining duplicates are preserved.
 func (f *File) DeleteSection(name string) {
 	if f.BlockMode {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 	}
 	lookupName := f.sectionLookupName(name)
-	delete(f.sectionsByName, lookupName)
-	delete(f.sectionList, lookupName)
+	list := f.sectionList[lookupName]
+	if len(list) <= 1 {
+		// Last (or only) section with this name — remove from maps entirely.
+		delete(f.sectionsByName, lookupName)
+		delete(f.sectionList, lookupName)
+	} else {
+		// Remove the first entry from the list; update sectionsByName to
+		// point to the new first section.
+		f.sectionList[lookupName] = list[1:]
+		f.sectionsByName[lookupName] = list[1]
+	}
 	for i, sec := range f.sections {
 		if f.sectionLookupName(sec.name) == lookupName {
 			f.sections = append(f.sections[:i], f.sections[i+1:]...)
@@ -417,6 +428,7 @@ func (f *File) loadSource(source interface{}) error {
 		data = v
 		f.sources = append(f.sources, dataSource{kind: "bytes", data: v})
 	case io.ReadCloser:
+		defer v.Close()
 		data, err = io.ReadAll(v)
 		if err != nil {
 			return err
