@@ -5,7 +5,7 @@
 **Target:** [go-ini/ini](https://github.com/go-ini/ini) (gopkg.in/ini.v1) — the most popular Go INI file parser
 **Module:** `github.com/agentine/stanza`
 **License:** MIT
-**Go:** 1.21+
+**Go:** 1.25+
 **Dependencies:** Zero
 
 ## Why Replace go-ini/ini
